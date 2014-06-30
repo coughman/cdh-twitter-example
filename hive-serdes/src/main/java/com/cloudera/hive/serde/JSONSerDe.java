@@ -43,6 +43,7 @@ import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
+import org.codehaus.jackson.map.DeserializationConfig.Feature;
 import org.codehaus.jackson.map.ObjectMapper;
 
 /**
@@ -119,7 +120,7 @@ public class JSONSerDe implements SerDe {
     Map<?,?> root = null;
     row.clear();
     try {
-      ObjectMapper mapper = new ObjectMapper();
+      ObjectMapper mapper = new ObjectMapper().configure(Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true);
       // This is really a Map<String, Object>. For more information about how
       // Jackson parses JSON in this example, see
       // http://wiki.fasterxml.com/JacksonDataBinding
