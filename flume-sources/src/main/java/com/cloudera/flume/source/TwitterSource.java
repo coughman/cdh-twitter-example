@@ -36,11 +36,10 @@ import twitter4j.StallWarning;
 import twitter4j.Status;
 import twitter4j.StatusDeletionNotice;
 import twitter4j.StatusListener;
+import twitter4j.TwitterObjectFactory;
 import twitter4j.TwitterStream;
 import twitter4j.TwitterStreamFactory;
-import twitter4j.auth.AccessToken;
 import twitter4j.conf.ConfigurationBuilder;
-import twitter4j.json.DataObjectFactory;
 
 /**
  * A Flume Source, which pulls data from Twitter's streaming API. Currently,
@@ -60,7 +59,7 @@ public class TwitterSource extends AbstractSource
   private String accessTokenSecret;
 
   private String[] keywords;
-
+  private double[][] locations;
   /** The actual Twitter stream. It's set up to collect raw JSON data */
   private  TwitterStream twitterStream;
 
@@ -82,6 +81,9 @@ public class TwitterSource extends AbstractSource
       keywords[i] = keywords[i].trim();
     }
 
+    String locationsString = context.getString(TwitterSourceConstants.LOCATIONS_KEY, ""); 
+    locations = parseLocations(locationsString);
+    
     ConfigurationBuilder cb = new ConfigurationBuilder();
     cb.setOAuthConsumerKey(consumerKey);
     cb.setOAuthConsumerSecret(consumerSecret);
@@ -93,7 +95,28 @@ public class TwitterSource extends AbstractSource
     twitterStream = new TwitterStreamFactory(cb.build()).getInstance();
   }
 
-  /**
+  private double[][] parseLocations(String locationsString) {
+	  double[][] locationArray = new double[2][2];
+
+	  if (locationsString == null || locationsString.equals("")) return locationArray;
+	  
+	  String[] locations = locationsString.split(",");
+	  
+	  assert(locations.length == 4);
+	  
+	  for (int i=0; i < locations.length; i++) {
+		  locations[i] = locations[i].trim();
+	  }
+	  
+	  locationArray[0][0] = Double.parseDouble(locations[0]);
+	  locationArray[0][1] = Double.parseDouble(locations[1]);
+	  locationArray[1][0] = Double.parseDouble(locations[2]);
+	  locationArray[1][1] = Double.parseDouble(locations[3]);
+	  	  
+	  return locationArray;
+  }
+
+/**
    * Start processing events. This uses the Twitter Streaming API to sample
    * Twitter, and process tweets.
    */
@@ -117,7 +140,7 @@ public class TwitterSource extends AbstractSource
 
         headers.put("timestamp", String.valueOf(status.getCreatedAt().getTime()));
         Event event = EventBuilder.withBody(
-            DataObjectFactory.getRawJSON(status).getBytes(), headers);
+            TwitterObjectFactory.getRawJSON(status).getBytes(), headers);
 
         channel.processEvent(event);
       }
@@ -136,18 +159,26 @@ public class TwitterSource extends AbstractSource
     twitterStream.addListener(listener);
 
     // Set up a filter to pull out industry-relevant tweets
-    if (keywords.length == 0) {
+    if (keywords.length == 0 && locations.length == 0) {
       logger.debug("Starting up Twitter sampling...");
       twitterStream.sample();
     } else {
       logger.debug("Starting up Twitter filtering...");
-
-      FilterQuery query = new FilterQuery().track(keywords);
+      FilterQuery query = new FilterQuery();
+      
+      if (keywords.length > 0) query.track(keywords);      
+      if (isValidBoundingBox(locations)) query.locations(locations);
+      
       twitterStream.filter(query);
     }
     super.start();
   }
 
+  public boolean isValidBoundingBox(double[][] box) {
+	  return (box[0][0] != 0.0 && box[0][1] != 0.0); 
+	  //return false;
+  }
+  
   /**
    * Stops the Source's event processing and shuts down the Twitter stream.
    */
